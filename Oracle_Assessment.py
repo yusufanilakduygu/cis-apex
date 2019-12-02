@@ -118,8 +118,82 @@ except cx_Oracle.DatabaseError as e:
 cur.close()    
 
     
+
+
+# Open cursor for controls
+
+try:
+    control_cur=rep_con.cursor()
+    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result from cis_controls where benchmark_no={} """.format(Benchmark_No)
+    control_cur.execute(control_query)
+    control_list=control_cur.fetchall()
+except cx_Oracle.DatabaseError as e:
+    print('Error reading cis_controls ' + str(e.args[0]))
+    quit()
+
+exec_cursor=target_con.cursor()
+
 """
+    Auditing start here
+    
+"""
+
+for control_sql in control_list:
+    print(control_sql[0])
+    try:
+        exec_cursor.execute(control_sql[1])
+    except cx_Oracle.DatabaseError as e:
+        print('Error executing cis_controls ' + str(e.args[0]))
+        quit()
+    audit_result=exec_cursor.fetchall()[0][0]
+   
+# Check the Control
+    
+    print(control_sql[2],control_sql[3],audit_result)
+    
+    if control_sql[2] == '=':
+        if audit_result == control_sql[3]:
+            control_result='PASS'
+        else:
+            control_result='FAIL'
+            
+    if control_sql[2] == '<>':
+        if audit_result != control_sql[3]:
+            control_result='PASS'
+        else:
+            control_result='FAIL'
+
+    if control_sql[2] == '>':
+        if audit_result > control_sql[3]:
+            control_result = 'PASS'
+        else:
+            control_result='FAIL'
+            
+    if control_sql[2] == '>=':
+        if audit_result >= control_sql[3]:
+            control_result = 'PASS'
+        else:
+            control_result='FAIL'  
+
+    if control_sql[2] == '<':
+        if audit_result < control_sql[3]:
+            control_result = 'PASS'
+        else:
+            control_result='FAIL'
+            
+    if control_sql[2] == '<=':
+        if audit_result <= control_sql[3]:
+            control_result = 'PASS'
+        else:
+            control_result='FAIL'
+            
+    print(audit_result,control_result)
+
+
+"""
+End of Programs 
 Close Repository and Target Connection
 """
+
 rep_con.close()
 target_con.close()
