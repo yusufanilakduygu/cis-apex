@@ -124,7 +124,7 @@ cur.close()
 
 try:
     control_cur=rep_con.cursor()
-    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result from cis_controls where benchmark_no={} """.format(Benchmark_No)
+    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result,control_detail_sql,control_remediation_sql from cis_controls where benchmark_no={} """.format(Benchmark_No)
     control_cur.execute(control_query)
     control_list=control_cur.fetchall()
 except cx_Oracle.DatabaseError as e:
@@ -189,6 +189,14 @@ for control_sql in control_list:
             
     print(audit_result,control_result)
 
+if control_result == 'FAIL':
+    try:
+       exec_cursor.execute(control_sql[4])
+    except cx_Oracle.DatabaseError as e:
+        print('Error executing detail sql ' + str(e.args[0]))
+        quit()
+    detail_result=exec_cursor.fetchall()
+    print (detail_result)
 
 """
 End of Programs 
