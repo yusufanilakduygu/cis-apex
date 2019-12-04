@@ -7,6 +7,7 @@ Created on Sun Dec  1 17:01:18 2019
 
 import cx_Oracle
 import getpass
+from tabulate import tabulate
 
 
 """
@@ -124,7 +125,7 @@ cur.close()
 
 try:
     control_cur=rep_con.cursor()
-    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result,control_detail_sql,control_remediation_sql from cis_controls where benchmark_no={} """.format(Benchmark_No)
+    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result,control_detail_sql,control_remediation_sql from cis_controls where benchmark_no={} AND control_command_type=1 """.format(Benchmark_No)
     control_cur.execute(control_query)
     control_list=control_cur.fetchall()
 except cx_Oracle.DatabaseError as e:
@@ -139,7 +140,8 @@ exec_cursor=target_con.cursor()
 """
 
 for control_sql in control_list:
-    print(control_sql[0])
+    print('0 --' , control_sql[0])
+    print('1 --', control_sql[1])
     try:
         exec_cursor.execute(control_sql[1])
     except cx_Oracle.DatabaseError as e:
@@ -149,7 +151,9 @@ for control_sql in control_list:
    
 # Check the Control
     
-    print(control_sql[2],control_sql[3],audit_result)
+    print('2 --',control_sql[2])
+    print('3 --', control_sql[3])
+    print('audit result --',audit_result)
     
     if control_sql[2] == '=':
         if audit_result == control_sql[3]:
@@ -187,16 +191,23 @@ for control_sql in control_list:
         else:
             control_result='FAIL'
             
-    print(audit_result,control_result)
+    print('control result --', control_result)
+    print('4--', control_sql[4])
 
-if control_result == 'FAIL':
-    try:
-       exec_cursor.execute(control_sql[4])
-    except cx_Oracle.DatabaseError as e:
-        print('Error executing detail sql ' + str(e.args[0]))
-        quit()
-    detail_result=exec_cursor.fetchall()
-    print (detail_result)
+    if control_result == 'FAIL':
+        try:
+            exec_cursor.execute(control_sql[4])
+        except cx_Oracle.DatabaseError as e:
+                print('Error executing detail sql ' + str(e.args[0]))
+                quit()
+        detail_result=exec_cursor.fetchall()
+        header=['Objects Caused FAIL']
+        detail_result=tabulate(detail_result,header,tablefmt="grid")
+        print(detail_result)
+
+# insert into CIS_ASS_EXEC in a loop
+#       INSERT here
+# after the loop calculate score of the assessment and update score column
 
 """
 End of Programs 
