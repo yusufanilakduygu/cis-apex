@@ -125,7 +125,7 @@ cur.close()
 
 try:
     control_cur=rep_con.cursor()
-    control_query="""select control_no,control_audit_sql,control_cond_type,control_cond_result,control_detail_sql,control_remediation_sql from cis_controls where benchmark_no={} AND control_command_type=1 """.format(Benchmark_No)
+    control_query="""select control_no, control_audit_sql, control_cond_type,control_cond_result, control_detail_sql, control_remediation_sql, CONTROL_NAME, CONTROL_NOTES, CONTROL_SEVERITY from cis_controls where benchmark_no={} AND control_command_type=1 order by control_no """.format(Benchmark_No)
     control_cur.execute(control_query)
     control_list=control_cur.fetchall()
 except cx_Oracle.DatabaseError as e:
@@ -138,75 +138,105 @@ exec_cursor=target_con.cursor()
     Auditing start here
     
 """
+#   control_result 3: Not made , 2: Error , 1: Success , 0: Fail    
+control_result=3
 
 for control_sql in control_list:
-    print('0 --' , control_sql[0])
-    print('1 --', control_sql[1])
     try:
         exec_cursor.execute(control_sql[1])
     except cx_Oracle.DatabaseError as e:
         print('Error executing cis_controls ' + str(e.args[0]))
+        control_result=2
         quit()
     audit_result=exec_cursor.fetchall()[0][0]
+    
+
    
 # Check the Control
     
-    print('2 --',control_sql[2])
-    print('3 --', control_sql[3])
-    print('audit result --',audit_result)
-    
+     
     if control_sql[2] == '=':
         if audit_result == control_sql[3]:
-            control_result='PASS'
+            control_result=1
         else:
-            control_result='FAIL'
+            control_result=0
             
     if control_sql[2] == '<>':
         if audit_result != control_sql[3]:
-            control_result='PASS'
+            control_result=1
         else:
-            control_result='FAIL'
+            control_result=0
 
     if control_sql[2] == '>':
         if audit_result > control_sql[3]:
-            control_result = 'PASS'
+            control_result = 1
         else:
-            control_result='FAIL'
+            control_result= 0
             
     if control_sql[2] == '>=':
         if audit_result >= control_sql[3]:
-            control_result = 'PASS'
+            control_result = 1
         else:
-            control_result='FAIL'  
+            control_result= 0  
 
     if control_sql[2] == '<':
         if audit_result < control_sql[3]:
-            control_result = 'PASS'
+            control_result = 1
         else:
-            control_result='FAIL'
+            control_result= 0
             
     if control_sql[2] == '<=':
         if audit_result <= control_sql[3]:
-            control_result = 'PASS'
+            control_result = 1
         else:
-            control_result='FAIL'
+            control_result= 0
             
-    print('control result --', control_result)
-    print('4--', control_sql[4])
-
-    if control_result == 'FAIL':
+    
+    if control_result == 0:
         try:
             exec_cursor.execute(control_sql[4])
         except cx_Oracle.DatabaseError as e:
                 print('Error executing detail sql ' + str(e.args[0]))
                 quit()
         detail_result=exec_cursor.fetchall()
-        header=['Objects Caused FAIL']
+        header=['Objects Caused to FAIL']
         detail_result=tabulate(detail_result,header,tablefmt="grid")
         print(detail_result)
 
+    
+
 # insert into CIS_ASS_EXEC in a loop
 #       INSERT here
+
+    try:
+        cur = rep_con.cursor()
+        dml="Insert into cis_ass_exec(  ASS_NO,\
+                                        EXEC_CONTROL_NO,\
+                                        EXEC_CONTROL_NAME,\
+                                        EXEC_CONTROL_NOTES,\
+                                        EXEC_CONTROL_AUDIT_SQL, \
+                                        EXEC_CONTROL_DETAIL_SQL,\
+                                        EXEC_CONTROL_REMEDIATION_SQL,\
+                                        EXEC_CONTROL_COND_TYPE, \
+		                                 EXEC_CONTROL_COND_RESULT,\
+                                        EXEC_DETAIL_SQL_RESULT,\
+                                        EXEC_RESULT, \
+                                        EXEC_SEVERITY) \
+									  values (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)" 
+        if control_result == 0:
+            row=(ass_no,control_sql[0],control_sql[6],control_sql[7],control_sql[1],control_sql[4],control_sql[5],control_sql[2],control_sql[3],detail_result,control_result,control_sql[8])
+        if control_result == 1:
+            row=(ass_no,control_sql[0],control_sql[6],control_sql[7],control_sql[1],control_sql[4],control_sql[5],control_sql[2],control_sql[3],'',control_result,control_sql[8])
+        
+        print('DML ----> ', dml)
+        cur.execute(dml,row)
+        cur.execute('commit')
+    except cx_Oracle.DatabaseError as e:
+        print('Error creating Assessment Exec Record ' + str(e.args[0]))
+        quit()
+    cur.close()
+
+
 # after the loop calculate score of the assessment and update score column
 
 """
