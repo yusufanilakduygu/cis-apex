@@ -4,10 +4,11 @@ Created on Sun Dec  1 17:01:18 2019
 
 @author: Anil
 """
-
+import configparser
 import cx_Oracle
 import getpass
 from tabulate import tabulate
+import datetime
 
 
 """
@@ -16,15 +17,26 @@ Make Connection to Repository
 
 """
 
+config = configparser.ConfigParser()
+config.read_file(open(r'config.txt'))
+rep_username = config.get('Repository', 'username')
+rep_password = config.get('Repository', 'password')
+rep_ConnectString = config.get('Repository', 'ConnectString')
+
+
+log_file= open("Assessment-Error-01.log", "a")
+
+
 print('\n')
 print('Welcome to Oracle Database Assessment tools-')
 print('ver 1.0 - The Last Build Date: 01/11/2019 17:01')
 print('\n')
 print('Trying to connect Repository DB....')
 try:
-    rep_con=cx_Oracle.connect('cis','adana147','192.168.56.110:1521/db1.localdomain') 
+    rep_con=cx_Oracle.connect(rep_username,rep_password,rep_ConnectString) 
 except cx_Oracle.DatabaseError as e:
-    print('Repository DB Database Connection Error '+ str(e.args[0]))
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Repository DB Database Connection Error '+ str(e.args[0]))
+    log_file.close()
     quit()
 print('Successfully connected to  Repository DB')
 
@@ -37,18 +49,19 @@ Getting Target DB No and its data
 Target_DB_No=input("Enter Target Connection number : ")
 try:
     cur = rep_con.cursor()
-    query = """Select conn_username,conn_host,conn_port,conn_dbname from cis_connections where conn_type=1 and conn_no={}""".format(Target_DB_No)
+    query = """Select conn_username,conn_host,conn_port,conn_dbname,conn_password from cis_connections where conn_type=1 and conn_no={}""".format(Target_DB_No)
     cur.execute(query)
     result=cur.fetchall()
 except cx_Oracle.DatabaseError as e:
-    print('Error getting connection data ' + str(e.args[0]))
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Error getting connection data ' + str(e.args[0]))
+    log_file.close()
     quit()
 if len(result) == 0 :
-    print('Connection Repository Data not found' )
-    quit()
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Connection Repository Data not found' )
+    log_file.close()
 target_username=result[0][0]
 target_conn_info=result[0][1]+':'+str(result[0][2])+'/'+result[0][3]
-print (target_username,target_conn_info)
+
 cur.close()
 
 """
@@ -57,14 +70,15 @@ Getting password for Target DB and make connection
 
 """
 
-target_pswd = getpass.getpass('Password for Target DB: ')
+target_pswd = result[0][4]
 print('Trying to connect Target  DB....')
 try:
     target_con=cx_Oracle.connect(target_username,target_pswd,target_conn_info) 
 except cx_Oracle.DatabaseError as e:
-    print('Target DB Database Connection Error '+ str(e.args[0]))
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Target DB Database Connection Error '+ str(e.args[0]))
+    log_file.close()
     quit()
-print('Successfully connected to Target DB')
+
 
 """
 
@@ -79,10 +93,12 @@ try:
     cur.execute(query)
     result=cur.fetchall()
 except cx_Oracle.DatabaseError as e:
-    print('Error getting Benchmark Data ' + str(e.args[0]))
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Error getting Benchmark Data ' + str(e.args[0]))
+    log_file.close()
     quit()
 if len(result) == 0 :
-    print('benchmark Data not found' )
+    log_file.write('\n'+str(datetime.datetime.now()) +' >> Benchmark Data not found' )
+    log_file.close()
     quit()
 print('The Chosen Benchmark Name : '+ result[0][0])
 cur.close()
@@ -98,23 +114,24 @@ try:
     cur.execute(query)
     ass_no=cur.fetchall()[0][0]        
 except cx_Oracle.DatabaseError as e:
-    print('Error creating Assessment No ' + str(e.args[0]))
+    log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error creating Assessment No ' + str(e.args[0]))
+    log_file.close()
     quit()
 
-print('New Created Assessment No : ', ass_no)
+
 cur.close()
 
 """ Insert CIS ASSESSMENTS """
 try:
     cur = rep_con.cursor()
     dml="""Begin
-           Insert into cis_assessments values ({},{},{},sysdate,NULL,NULL);
+           Insert into cis_assessments (conn_no,benchmark_no,ass_no,ass_date,ass_score,ass_desc) values ({},{},{},sysdate,NULL,NULL);
            commit;
            end;""".format(Target_DB_No,Benchmark_No,ass_no);
-    print(dml)
     cur.execute(dml)
 except cx_Oracle.DatabaseError as e:
-    print('Error creating Assessment Record ' + str(e.args[0]))
+    log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error creating Assessment Record ' + str(e.args[0]))
+    log_file.close()
     quit()
 cur.close()    
 
@@ -129,7 +146,8 @@ try:
     control_cur.execute(control_query)
     control_list=control_cur.fetchall()
 except cx_Oracle.DatabaseError as e:
-    print('Error reading cis_controls ' + str(e.args[0]))
+    log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error reading cis_controls ' + str(e.args[0]))
+    log_file.close()
     quit()
 
 exec_cursor=target_con.cursor()
@@ -138,70 +156,87 @@ exec_cursor=target_con.cursor()
     Auditing start here
     
 """
-#   control_result 3: Not made , 2: Error , 1: Success , 0: Fail    
-control_result=3
+#   control_result 3: Unmade , 2: Error , 1: Success , 0: Fail    
+fail_count=0
+pass_count=0
+control_result=0
+
 
 for control_sql in control_list:
     try:
+        control_condition=control_sql[2]
         exec_cursor.execute(control_sql[1])
+        audit_result=exec_cursor.fetchall()[0][0]
     except cx_Oracle.DatabaseError as e:
-        print('Error executing cis_controls ' + str(e.args[0]))
+        log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error executing cis_controls ' + str(e.args[0]))
         control_result=2
-        quit()
-    audit_result=exec_cursor.fetchall()[0][0]
+        control_condition='ERROR'
+    
     
 
    
 # Check the Control
-    
+ 
      
-    if control_sql[2] == '=':
+    if control_condition == '=':
         if audit_result == control_sql[3]:
             control_result=1
+            pass_count=pass_count+1
         else:
             control_result=0
+            fail_count=fail_count+1
             
-    if control_sql[2] == '<>':
+            
+    if control_condition == '<>':
         if audit_result != control_sql[3]:
             control_result=1
+            pass_count=pass_count+1
         else:
             control_result=0
+            fail_count=fail_count+1
 
-    if control_sql[2] == '>':
+    if control_condition == '>':
         if audit_result > control_sql[3]:
             control_result = 1
+            pass_count=pass_count+1
         else:
             control_result= 0
+            fail_count=fail_count+1
             
-    if control_sql[2] == '>=':
+    if control_condition == '>=':
         if audit_result >= control_sql[3]:
             control_result = 1
+            pass_count=pass_count+1
         else:
-            control_result= 0  
+            control_result= 0
+            fail_count=fail_count+1
 
-    if control_sql[2] == '<':
+    if control_condition == '<':
         if audit_result < control_sql[3]:
             control_result = 1
+            pass_count=pass_count+1
         else:
             control_result= 0
+            fail_count=fail_count+1
             
-    if control_sql[2] == '<=':
+    if control_condition == '<=':
         if audit_result <= control_sql[3]:
             control_result = 1
+            pass_count=pass_count+1
         else:
             control_result= 0
+            fail_count=fail_count+1
             
     
     if control_result == 0:
         try:
             exec_cursor.execute(control_sql[4])
+            detail_result=exec_cursor.fetchall()
+            header=['Objects Caused to FAIL']
+            detail_result=tabulate(detail_result,header,tablefmt="grid")
         except cx_Oracle.DatabaseError as e:
-                print('Error executing detail sql ' + str(e.args[0]))
-                quit()
-        detail_result=exec_cursor.fetchall()
-        header=['Objects Caused to FAIL']
-        detail_result=tabulate(detail_result,header,tablefmt="grid")
-        print(detail_result)
+                log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error executing detail sql ' + str(e.args[0]))
+                detail_result='Error executing detail sql ' + str(e.args[0])
 
     
 
@@ -218,31 +253,78 @@ for control_sql in control_list:
                                         EXEC_CONTROL_DETAIL_SQL,\
                                         EXEC_CONTROL_REMEDIATION_SQL,\
                                         EXEC_CONTROL_COND_TYPE, \
-		                                 EXEC_CONTROL_COND_RESULT,\
+		                                EXEC_CONTROL_COND_RESULT,\
                                         EXEC_DETAIL_SQL_RESULT,\
                                         EXEC_RESULT, \
                                         EXEC_SEVERITY) \
 									  values (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)" 
         if control_result == 0:
             row=(ass_no,control_sql[0],control_sql[6],control_sql[7],control_sql[1],control_sql[4],control_sql[5],control_sql[2],control_sql[3],detail_result,control_result,control_sql[8])
-        if control_result == 1:
+        if (control_result == 1) or (control_result == 2):
             row=(ass_no,control_sql[0],control_sql[6],control_sql[7],control_sql[1],control_sql[4],control_sql[5],control_sql[2],control_sql[3],'',control_result,control_sql[8])
         
-        print('DML ----> ', dml)
         cur.execute(dml,row)
         cur.execute('commit')
     except cx_Oracle.DatabaseError as e:
-        print('Error creating Assessment Exec Record ' + str(e.args[0]))
+        log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error creating Assessment Exec Record ' + str(e.args[0]))
+        log_file.close()
         quit()
     cur.close()
 
 
+
+
+# Update Assessments_scores 
+# Find unmade record numbers
+
+dml="select count(*) from cis_controls where   benchmark_no=:1  and control_command_type=2 "
+row=[int(Benchmark_No)]
+try:
+    cur = rep_con.cursor()
+    cur.execute(dml,row)
+    sql_return=cur.fetchall()
+    not_made_count=sql_return[0][0]
+except  cx_Oracle.DatabaseError as e:
+    log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error to find unmade record count' + str(e.args[0])) 
+    log_file.close()
+    quit()
+cur.close()
+
+    
+ass_score=int(pass_count/(fail_count+pass_count)*100)
+dml=" update cis_assessments set pass_count=:1 , fail_count=:2 ,ass_score=:3 , not_made_count=:4 where ass_no=:5 "
+row=[pass_count,fail_count,ass_score, not_made_count,ass_no]
+try:
+    cur = rep_con.cursor()
+    cur.execute(dml,row)
+    cur.execute('commit')
+except  cx_Oracle.DatabaseError as e:
+    log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error Update cis_assessments for not made records' + str(e.args[0]))
+    log_file.close()
+    quit()
+cur.close()
+
+# Update for Manual Control 
+
+dml="insert into cis_ass_exec (ASS_NO,EXEC_CONTROL_NO,EXEC_CONTROL_NAME,EXEC_CONTROL_NOTES,EXEC_CONTROL_AUDIT_SQL,EXEC_CONTROL_DETAIL_SQL,EXEC_CONTROL_REMEDIATION_SQL,EXEC_SEVERITY,EXEC_RESULT )\
+    select :1,CONTROL_NO,CONTROL_NAME,CONTROL_NOTES,CONTROL_AUDIT_SQL,CONTROL_DETAIL_SQL,CONTROL_REMEDIATION_SQL,CONTROL_SEVERITY,3 from cis_controls where   benchmark_no=:2 and control_command_type=2"
+row=[ass_no,int(Benchmark_No)]    
+try:
+    cur = rep_con.cursor()
+    cur.execute(dml,row)
+    cur.execute('commit')
+except  cx_Oracle.DatabaseError as e:
+    log_file.write('\n'+ str(datetime.datetime.now()) +' Error During Insert of Manual Commands' + str(e.args[0])) 
+    log_file.close()
+    quit()
+cur.close()
+ 
 # after the loop calculate score of the assessment and update score column
 
 """
 End of Programs 
 Close Repository and Target Connection
 """
-
+log_file.close()
 rep_con.close()
 target_con.close()
