@@ -9,7 +9,7 @@ import cx_Oracle
 import getpass
 from tabulate import tabulate
 import datetime
-
+import sys
 
 """
 
@@ -168,8 +168,11 @@ for control_sql in control_list:
         exec_cursor.execute(control_sql[1])
         audit_result=exec_cursor.fetchall()[0][0]
     except cx_Oracle.DatabaseError as e:
-        log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error executing cis_controls ' + str(e.args[0]))
+        log_file.write('\n'+ str(datetime.datetime.now()) +' Control no : '+control_sql[0]+' >> Error executing cis_controls ' + str(e.args[0]))
         control_result=2
+        control_condition='ERROR'
+    except:
+        log_file.write('\n'+ str(datetime.datetime.now()) +' Control no : '+control_sql[0]+' >> Unexpected error: at ' + str(sys.exc_info()[0])  ) 
         control_condition='ERROR'
     
     
@@ -235,7 +238,7 @@ for control_sql in control_list:
             header=['Objects Caused to FAIL']
             detail_result=tabulate(detail_result,header,tablefmt="grid")
         except cx_Oracle.DatabaseError as e:
-                log_file.write('\n'+ str(datetime.datetime.now()) +' >> Error executing detail sql ' + str(e.args[0]))
+                log_file.write('\n'+ str(datetime.datetime.now()) +' Control No : '+ control_sql[0]+' >> Error executing detail sql ' + str(e.args[0]))
                 detail_result='Error executing detail sql ' + str(e.args[0])
 
     
