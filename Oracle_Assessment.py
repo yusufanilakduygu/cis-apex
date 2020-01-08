@@ -4,12 +4,15 @@ Created on Sun Dec  1 17:01:18 2019
 
 @author: Anil
 """
+
+
 import configparser
 import cx_Oracle
 import getpass
 from tabulate import tabulate
 import datetime
 import sys
+import pyodbc
 
 """
 
@@ -27,18 +30,14 @@ rep_ConnectString = config.get('Repository', 'ConnectString')
 log_file= open("Assessment-Error-01.log", "a")
 
 
-print('\n')
-print('Welcome to Oracle Database Assessment tools-')
-print('ver 1.0 - The Last Build Date: 01/11/2019 17:01')
-print('\n')
-print('Trying to connect Repository DB....')
+
 try:
     rep_con=cx_Oracle.connect(rep_username,rep_password,rep_ConnectString) 
 except cx_Oracle.DatabaseError as e:
     log_file.write('\n'+str(datetime.datetime.now()) +' >> Repository DB Database Connection Error '+ str(e.args[0]))
     log_file.close()
     quit()
-print('Successfully connected to  Repository DB')
+
 
 """
 
@@ -46,10 +45,10 @@ Getting Target DB No and its data
 
 """
 
-Target_DB_No=input("Enter Target Connection number : ")
+Target_DB_No=sys.argv[1]
 try:
     cur = rep_con.cursor()
-    query = """Select conn_username,conn_host,conn_port,conn_dbname,conn_password from cis_connections where conn_type=1 and conn_no={}""".format(Target_DB_No)
+    query = """Select conn_username,conn_host,conn_port,conn_dbname,conn_password , conn_type from cis_connections where conn_no={}""".format(Target_DB_No)
     cur.execute(query)
     result=cur.fetchall()
 except cx_Oracle.DatabaseError as e:
@@ -59,6 +58,8 @@ except cx_Oracle.DatabaseError as e:
 if len(result) == 0 :
     log_file.write('\n'+str(datetime.datetime.now()) +' >> Connection Repository Data not found' )
     log_file.close()
+    
+conn_type=result[0][5]
 target_username=result[0][0]
 target_conn_info=result[0][1]+':'+str(result[0][2])+'/'+result[0][3]
 
@@ -71,14 +72,29 @@ Getting password for Target DB and make connection
 """
 
 target_pswd = result[0][4]
-print('Trying to connect Target  DB....')
-try:
-    target_con=cx_Oracle.connect(target_username,target_pswd,target_conn_info) 
-except cx_Oracle.DatabaseError as e:
-    log_file.write('\n'+str(datetime.datetime.now()) +' >> Target DB Database Connection Error '+ str(e.args[0]))
-    log_file.close()
-    quit()
 
+# Connect to ORACLE Database
+
+if conn_type == 1 :
+
+    try:
+        target_con=cx_Oracle.connect(target_username,target_pswd,target_conn_info) 
+    except cx_Oracle.DatabaseError as e:
+        log_file.write('\n'+str(datetime.datetime.now()) +' >> Target DB Database Connection Error '+ str(e.args[0]))
+        log_file.close()
+        quit()
+  
+# Connect to SQL Server
+        
+if conn_type == 2 :
+    
+    try:
+        target_conn_info = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER='+result[0][1]+';DATABASE='+result[0][3]+';UID='+result[0][0]+';PWD='+ result[0][4]+';PORT='+str(result[0][2])
+        target_con = pyodbc.connect(target_conn_info)
+    except: 
+        log_file.write('\n'+str(datetime.datetime.now()) + ' >> target info :' + target_conn_info+ ' >> Target DB Database Connection Error '+  str(sys.exc_info()[0]) )
+        log_file.close()
+        quit()    
 
 """
 
@@ -86,7 +102,7 @@ Getting Benchmark No and Create Assessment
 
 """
 
-Benchmark_No=input("Enter Benchmark Number : ")
+Benchmark_No=sys.argv[2]
 try:
     cur = rep_con.cursor()
     query = """Select Benchmark_name from cis_benchmarks where benchmark_no={}""".format(Benchmark_No)
@@ -100,7 +116,7 @@ if len(result) == 0 :
     log_file.write('\n'+str(datetime.datetime.now()) +' >> Benchmark Data not found' )
     log_file.close()
     quit()
-print('The Chosen Benchmark Name : '+ result[0][0])
+
 cur.close()
 
 """ Create Assessment no """
@@ -162,18 +178,20 @@ pass_count=0
 control_result=0
 
 
+
 for control_sql in control_list:
     try:
         control_condition=control_sql[2]
         exec_cursor.execute(control_sql[1])
         audit_result=exec_cursor.fetchall()[0][0]
     except cx_Oracle.DatabaseError as e:
-        log_file.write('\n'+ str(datetime.datetime.now()) +' Control no : '+control_sql[0]+' >> Error executing cis_controls ' + str(e.args[0]))
+        log_file.write('\n'+ str(datetime.datetime.now()) +' Audit SQL Run Control no : '+control_sql[0]+' >> Error executing cis_controls ' + str(e.args[0]))
         control_result=2
         control_condition='ERROR'
     except:
-        log_file.write('\n'+ str(datetime.datetime.now()) +' Control no : '+control_sql[0]+' >> Unexpected error: at ' + str(sys.exc_info()[0])  ) 
+        log_file.write('\n'+ str(datetime.datetime.now()) +' Audit SQL Run Control no : '+control_sql[0]+' >> Unexpected error: at ' + str(sys.exc_info()[0])  ) 
         control_condition='ERROR'
+        control_result=2
     
     
 
@@ -231,17 +249,18 @@ for control_sql in control_list:
             fail_count=fail_count+1
             
     
-    if control_result == 0:
+    if control_result == 0 and  control_condition != 'ERROR' :
         try:
             exec_cursor.execute(control_sql[4])
             detail_result=exec_cursor.fetchall()
             header=['Objects Caused to FAIL']
             detail_result=tabulate(detail_result,header,tablefmt="grid")
         except cx_Oracle.DatabaseError as e:
-                log_file.write('\n'+ str(datetime.datetime.now()) +' Control No : '+ control_sql[0]+' >> Error executing detail sql ' + str(e.args[0]))
+                log_file.write('\n'+ str(datetime.datetime.now()) +' Detail SQL Run Control No : '+ control_sql[0]+' >> Error executing detail sql ' + str(e.args[0]))
                 detail_result='Error executing detail sql ' + str(e.args[0])
-
-    
+        except:
+            log_file.write('\n'+ str(datetime.datetime.now()) +' Detail SQL Run Control no : '+control_sql[0]+' >> Unexpected error: at ' + str(sys.exc_info()[0])  ) 
+            detail_result='Error executing detail sql ' + str(sys.exc_info()[0]) 
 
 # insert into CIS_ASS_EXEC in a loop
 #       INSERT here
