@@ -22,12 +22,12 @@ wwv_flow_api.import_begin (
 end;
 /
  
-prompt APPLICATION 100 - Database Benchmarks
+prompt APPLICATION 100 - Database Benchmark Manager
 --
 -- Application Export:
 --   Application:     100
---   Name:            Database Benchmarks
---   Date and Time:   21:04 Monday December 23, 2019
+--   Name:            Database Benchmark Manager
+--   Date and Time:   21:58 Wednesday January 8, 2020
 --   Exported By:     CIS-ADMIN
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -80,7 +80,7 @@ wwv_flow_api.create_flow(
  p_id=>wwv_flow.g_flow_id
 ,p_display_id=>nvl(wwv_flow_application_install.get_application_id,100)
 ,p_owner=>nvl(wwv_flow_application_install.get_schema,'CIS')
-,p_name=>nvl(wwv_flow_application_install.get_application_name,'Database Benchmarks')
+,p_name=>nvl(wwv_flow_application_install.get_application_name,'Database Benchmark Manager')
 ,p_alias=>nvl(wwv_flow_application_install.get_application_alias,'100')
 ,p_page_view_logging=>'YES'
 ,p_page_protection_enabled_y_n=>'Y'
@@ -96,7 +96,7 @@ wwv_flow_api.create_flow(
 ,p_authentication=>'PLUGIN'
 ,p_authentication_id=>wwv_flow_api.id(16862138387006859)
 ,p_application_tab_set=>1
-,p_logo_image=>'TEXT:DB Benchmark'
+,p_logo_image=>'TEXT:Database Benchmark Manager'
 ,p_app_builder_icon_name=>'app-icon.svg'
 ,p_proxy_server=>nvl(wwv_flow_application_install.get_proxy,'')
 ,p_no_proxy_domains=>nvl(wwv_flow_application_install.get_no_proxy_domains,'')
@@ -112,7 +112,7 @@ wwv_flow_api.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'CIS'
 ,p_last_updated_by=>'CIS-ADMIN'
-,p_last_upd_yyyymmddhh24miss=>'20191222215700'
+,p_last_upd_yyyymmddhh24miss=>'20200104171621'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>3
 ,p_ui_type_name => null
@@ -11733,7 +11733,7 @@ wwv_flow_api.create_page(
 ,p_autocomplete_on_off=>'OFF'
 ,p_page_template_options=>'#DEFAULT#'
 ,p_last_updated_by=>'CIS-ADMIN'
-,p_last_upd_yyyymmddhh24miss=>'20191210212310'
+,p_last_upd_yyyymmddhh24miss=>'20200104171620'
 );
 wwv_flow_api.create_page_plug(
  p_id=>wwv_flow_api.id(16982286124609474)
@@ -11799,6 +11799,7 @@ wwv_flow_api.create_worksheet_column(
 ,p_column_link=>'f?p=&APP_ID.:12:&SESSION.::&DEBUG.:RP:P12_ASS_NO:#ASS_NO#'
 ,p_column_linktext=>'#ASS_DATE#'
 ,p_column_type=>'STRING'
+,p_format_mask=>'DD-MM-YYYY HH24:MI'
 );
 wwv_flow_api.create_worksheet_column(
  p_id=>wwv_flow_api.id(17334706113667130)
@@ -11875,7 +11876,6 @@ wwv_flow_api.create_worksheet_column(
 ,p_column_identifier=>'J'
 ,p_column_label=>'Ass No'
 ,p_column_type=>'NUMBER'
-,p_display_text_as=>'HIDDEN'
 );
 wwv_flow_api.create_worksheet_rpt(
  p_id=>wwv_flow_api.id(17508099972250541)
